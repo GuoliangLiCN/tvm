@@ -1616,6 +1616,23 @@ def test_forward_mean():
     check_mean((10, 8, 16, 32), axis=(1,2), keepdims=True)
 
 #######################################################################
+# Size
+# ----
+def test_forward_size():
+    def check_size(ishape):
+        np_input = np.random.uniform(size=ishape).astype(np.float32)
+        with tf.Graph().as_default():
+            input = tf.placeholder(shape=np_input.shape, dtype=np_input.dtype, name='input')
+            tf.size(input, name='size')
+            compare_tf_with_tvm([np_input], ['input:0'], 'size:0')
+
+    if tf.__version__ < LooseVersion('1.1'):
+        check_size((10, 8, 16, 32))
+        check_size((10,))
+        check_size(())
+
+
+#######################################################################
 # All
 # ---
 def test_forward_all():
@@ -1711,6 +1728,7 @@ if __name__ == '__main__':
     test_forward_depthtospace()
     test_forward_squeeze()
     test_forward_pack()
+    test_forward_size()
     test_forward_resize_bilinear()
     test_forward_broadcast_to()
     test_forward_fill()

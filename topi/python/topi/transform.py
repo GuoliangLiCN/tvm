@@ -424,7 +424,7 @@ def shape(array, dtype="int32"):
     Parameters
     ----------
     array : tvm.Tensor
-        The source tenosr.
+        The source tensor.
 
     dtype : str, optional
         The target data type.
@@ -435,3 +435,22 @@ def shape(array, dtype="int32"):
         The resulting tensor.
     """
     return cpp.shape(array, dtype)
+
+
+def size(array, dtype="int32"):
+    """Get the size of input array
+
+    Parameters
+    ----------
+    array : tvm.Tensor
+        The source tensor.
+
+    dtype : str, optional
+        The target data type.
+
+    Returns
+    -------
+    result : tvm.Tensor
+        The resulting tensor.
+    """
+    return cpp.size(array, dtype)

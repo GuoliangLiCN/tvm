@@ -273,6 +273,17 @@ struct ShapeOfAttrs : public tvm::AttrsNode<ShapeOfAttrs> {
   }
 };
 
+/*! \brief Attributes for Size operator */
+struct SizeAttrs : public tvm::AttrsNode<SizeAttrs> {
+  DataType dtype;
+
+  TVM_DECLARE_ATTRS(SizeAttrs, "relay.attrs.SizeAttrs") {
+    TVM_ATTR_FIELD(dtype)
+        .describe("Target data type")
+        .set_default(NullValue<DataType>());
+  }
+};
+
 }  // namespace relay
 }  // namespace tvm
 #endif  // TVM_RELAY_ATTRS_TRANSFORM_H_

@@ -1271,6 +1271,7 @@ _convert_map = {
     'Shape'                             : _shape(),
     'Sigmoid'                           : AttrCvt('sigmoid'),
     'Sign'                              : AttrCvt('sign'),
+    'Size'                              : AttrCvt('num_elements'),
     'Slice'                             : _slice(),
     'Softmax'                           : _softmax(),
     'Softplus'                          : _softplus(),
