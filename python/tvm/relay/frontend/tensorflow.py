@@ -1273,6 +1273,7 @@ _convert_map = {
     'Tile'                              : _tile(),
     'Transpose'                         : _transpose(),
     'Unpack'                            : _unpack(),
+    'ZerosLike'                         : AttrCvt('zeros_like'),
 
 }
 
@@ -2287,6 +2288,7 @@ def from_tensorflow(graph, layout="NHWC", shape=None, outputs=None):
     params : dict of str to tvm.ndarray
         Dict of converted parameters stored in tvm.ndarray format
     """
+    print("Graph is: \n{}".format(graph))
     g = GraphProto()
     sym, params = g.from_tensorflow(graph, layout, shape, outputs)
     return sym, params

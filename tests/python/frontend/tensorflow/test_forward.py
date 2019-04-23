@@ -136,6 +136,8 @@ def compare_tf_with_tvm(in_data, in_name, out_name, init_global_variables=False,
             )
         tf_output = run_tf_graph(sess, in_data, in_name, out_name)
 
+        print("tf_output is {}".format(tf_output))
+
         for device in ["llvm", "cuda"]:
             ctx = tvm.context(device, 0)
             if not ctx.exist:
@@ -1034,8 +1036,6 @@ def test_forward_lstm():
     '''test LSTM block cell'''
     _test_lstm_cell(1, 2, 1, 0.0, 'float32')
 
-
-
 #######################################################################
 # Pack
 # ---
@@ -1128,7 +1128,6 @@ def test_forward_logical():
     test_logical_xor()
     test_logical_not()
 
-
 #######################################################################
 # Where, Select
 # -------------
@@ -1140,10 +1139,76 @@ def test_where():
             input2 = tf.placeholder(tf.int32, shape=[1, 4, 4, 3], name='input2')
             mask = input1 > input2
             tf.where(mask, input1 + 1, input2 * 2)
+            print("graph is \n{}".format(tf.get_default_graph().as_graph_def()))
             in_data1 = np.random.uniform(0, 10, size=(1, 4, 4, 3)).astype("uint32")
             in_data2 = np.random.uniform(0, 10, size=(1, 4, 4, 3)).astype("uint32")
             compare_tf_with_tvm([in_data1, in_data2], ['input1:0', 'input2:0'], 'Select:0')
 
+#######################################################################
+# Zeros, Ones, ZerosLike, OnesLike
+# --------------------------------
+
+def _test_forward_zeros(in_shape, dtype):
+    np_data = np.random.uniform(-10, 10, size=in_shape).astype(dtype)
+    tf.reset_default_graph()
+    #in_data = tf.placeholder(dtype, shape=in_shape, name="in_data")
+    #tf.zeros(in_shape, dtype, name="zeros")
+    #tf.ones(in_shape, dtype, name="ones")
+    #tf.zeros_like(np_data)
+    tf.ones_like(np_data, name='ones_like')
+    print("graph is \n{}".format(tf.get_default_graph().as_graph_def()))
+    compare_tf_with_tvm([], ['in_data:0'], 'ones_like:0')
+
+def test_forward_zeros():
+    _test_forward_zeros((2, 3), "int32")
+    _test_forward_zeros((2, 3, 5), "int8")
+    _test_forward_zeros((2, 3, 5, 7), "uint16")
+    _test_forward_zeros((2, 3, 11), "float32")
+    _test_forward_zeros((2, 3, 11), "float64")
+
+def _test_forward_ones(in_shape, dtype):
+    np_data = np.random.uniform(-10, 10, size=in_shape).astype(dtype)
+    tf.reset_default_graph()
+    in_data = tf.placeholder(dtype, in_shape, name="in_data")
+    tf.ones(in_data, name="ones")
+    compare_tf_with_tvm([np_data], ['in_data:0'], 'ones:0')
+
+def test_forward_ones():
+    _test_forward_ones((2, 3), "int32")
+    _test_forward_ones((2, 3, 5), "int8")
+    _test_forward_ones((2, 3, 5, 7), "uint16")
+    _test_forward_ones((2, 3, 11), "float32")
+    _test_forward_ones((2, 3, 11), "float64")
+
+def _test_forward_zeros_like(in_shape, dtype):
+    np_data = np.random.uniform(-10, 10, size=in_shape).astype(dtype)
+    tf.reset_default_graph()
+    in_data = tf.placeholder(dtype, in_shape, name="in_data")
+    tf.zeros_like(in_data, name="zeros_like")
+    print("graph is \n{}".format(tf.get_default_graph().as_graph_def()))
+    compare_tf_with_tvm([np_data], ['in_data:0'], 'zeros_like:0')
+
+def test_forward_zeros_like():
+    _test_forward_zeros_like((2, 3), "int32")
+    _test_forward_zeros_like((2, 3, 5), "int8")
+    _test_forward_zeros_like((2, 3, 5, 7), "uint16")
+    _test_forward_zeros_like((2, 3, 11), "float32")
+    _test_forward_zeros_like((2, 3, 11), "float64")
+
+def _test_forward_ones_like(in_shape, dtype):
+    np_data = np.random.uniform(-10, 10, size=in_shape).astype(dtype)
+    tf.reset_default_graph()
+    in_data = tf.placeholder(dtype, in_shape, name="in_data")
+    tf.ones_like(in_data, name="ones_like")
+    print("graph is \n{}".format(tf.get_default_graph().as_graph_def()))
+    compare_tf_with_tvm([np_data], ['in_data:0'], 'ones_like:0')
+
+def test_forward_ones_like():
+    _test_forward_ones_like((2, 3), "int32")
+    _test_forward_ones_like((2, 3, 5), "int8")
+    _test_forward_ones_like((2, 3, 5, 7), "uint16")
+    _test_forward_ones_like((2, 3, 11), "float32")
+    _test_forward_ones_like((2, 3, 11), "float64")
 
 #######################################################################
 # Inception V3
@@ -1686,7 +1751,7 @@ def test_placeholder():
 # Main
 # ----
 if __name__ == '__main__':
-
+    """
     # Transforms
     test_forward_transpose()
     test_forward_reshape()
@@ -1723,7 +1788,14 @@ if __name__ == '__main__':
     test_forward_sqrt()
     test_forward_rsqrt()
     test_forward_expand_dims()
+    #test_forward_reshape()
+    """
+    #test_forward_zeros_like()
+    #test_forward_zeros()
+    #test_forward_ones()
+    test_forward_ones_like()
 
+    """
     # Reductions
     test_forward_argminmax()
     test_forward_reduce()
@@ -1766,3 +1838,5 @@ if __name__ == '__main__':
     test_forward_rel_ops()
     test_forward_logical()
     test_where()
+    """
+
