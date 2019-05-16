@@ -869,6 +869,14 @@ def test_forward_crop():
 
 
 #######################################################################
+# Non Max Suppression
+# -------------------
+def test_forward_nms_v2():
+    """ NonMaxSuppressionV2 """
+    _test_crop((1, 224, 224, 3), 20, 20, 120, 120)
+
+
+#######################################################################
 # LSTM
 # ----
 
@@ -1611,6 +1619,9 @@ if __name__ == '__main__':
 
     # RNN
     test_forward_lstm()
+
+    # NMS
+    test_forward_nms_v2()
 
     # Elementwise
     test_forward_ceil()
