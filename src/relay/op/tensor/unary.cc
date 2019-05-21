@@ -135,7 +135,6 @@ This function takes a tensor, a minimum value `a_min`, and a maximum value `a_ma
 .set_attrs_type_key("relay.attrs.ClipAttrs")
 .set_support_level(3);
 
-
 RELAY_REGISTER_UNARY_OP("floor")
 .describe(R"code(Returns the floor of input array, computed element-wise.
 )code" TVM_ADD_FILELINE)
@@ -278,6 +277,22 @@ RELAY_REGISTER_OP("shape_of")
                                ElemwiseArbitraryLayout)
 .set_support_level(10)
 .set_attr<FTVMCompute>("FTVMCompute", ShapeOfCompute);
+
+TVM_REGISTER_API("relay.op._make.noop").set_body_typed(TensorNode::make);
+//.set_body_typed<Expr(Expr)>([](Expr data) {
+ // auto attrs = make_node<ShapeOfAttrs>();
+ //attrs->dtype = dtype;
+  //static const Op& op = Op::Get("shape_of");
+  //return CallNode::make(op, {data}, Attrs(attrs), {});
+//});
+
+RELAY_REGISTER_OP("noop")
+.describe(R"code(NoOp, undefined op.
+Used to produce dummy node during optimization.
+)code" TVM_ADD_FILELINE)
+.set_num_inputs(0)
+//.add_argument("data", "Tensor", "The input tensor.")
+.set_support_level(10);
 
 }  // namespace relay
 }  // namespace tvm

@@ -1979,9 +1979,30 @@ def test_placeholder():
 
 
 #######################################################################
+# NoOp
+# ----
+def test_forward_no_op():
+    with tf.Graph().as_default():
+        #np_data = np.random.uniform(1, 100, size=(5, 7, 11)).astype(np.float32)
+        #tf.reset_default_graph()
+        #in_data = tf.placeholder(tf.float32, (5, 7, 11), name="in_data")
+        ret = tf.no_op("no_op_test")#sqrt(in_data, name="sqrt")
+        with tf.Session() as sess:
+            tf_out = sess.run(ret)
+        print("tf_out is {}".format(tf_out))
+        print("{}".format(tf.get_default_graph().as_graph_def()))
+        expr, params = relay.frontend.from_tensorflow(tf.get_default_graph().as_graph_def())
+        ex = relay.create_executor('debug')
+        relay_out = ex.evaluate(expr)(**params)
+        print("relay_out is {}".format(relay_out))
+        np.testing.assert_allclose(tf_out, relay_out)
+
+
+#######################################################################
 # Main
 # ----
 if __name__ == '__main__':
+    """
 
     # Transforms
     test_forward_transpose()
@@ -2052,6 +2073,7 @@ if __name__ == '__main__':
     test_forward_multi_output()
     test_forward_variable()
     test_placeholder()
+    test_noop()
 
     # NN
     test_forward_convolution()
@@ -2085,3 +2107,5 @@ if __name__ == '__main__':
 
     test_forward_matmul()
     # TODO missing tests: rank, range
+    """
+    test_forward_no_op()

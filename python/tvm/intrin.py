@@ -290,6 +290,20 @@ def rsqrt(x):
     """
     return call_pure_intrin(x.dtype, "rsqrt", x)
 
+def noop():
+    """dummy node, does nothing.
+
+    Parameters
+    ----------
+    x : Expr
+        Input argument.
+
+    Returns
+    -------
+    y : Expr
+        The result.
+    """
+    return _make.noop()
 
 def floor(x):
     """Take floor of float input x.
