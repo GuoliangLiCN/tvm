@@ -114,6 +114,11 @@ def sigmoid(data):
     """
     return _make.sigmoid(data)
 
+def noop():
+    """Does nothing.
+    """
+    from .. import _make as _relay_make
+    return _make.noop()#_relay_make.noop()
 
 def floor(data):
     """Compute element-wise floor of data.

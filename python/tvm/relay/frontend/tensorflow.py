@@ -516,7 +516,7 @@ def _matmul():
 
 def _undef():
     def _impl(inputs, attr, params):
-        return _sym.__undef__()
+        return AttrCvt('noop')(inputs, attr)#_get_relay_op('noop')
     return _impl
 
 def _identity():
@@ -1235,6 +1235,7 @@ _convert_map = {
     'Mean'                              : _mean(),
     'Minimum'                           : _elemwise('minimum'),
     'Mul'                               : _elemwise('multiply'),
+    'NoOp'                              : _undef(),
     'NotEqual'                          : _broadcast('not_equal'),
     'Pack'                              : _pack(),
     'Pad'                               : _pad('Pad'),
@@ -1901,7 +1902,7 @@ class GraphProto(object):
                 #graph node name.eg: Node name:- 'Model/RNN/cell_0/RnnCell', but the
                 #output name will be 'Model/RNN/cell_0/RnnCell:0'. In this case,
                 #the digit has to be ignored.
-                if ":" in node.input[0]:
+                if len(node.input) > 0 and ":" in node.input[0]:
                     in_name, _ = node.input[0].split(':')
                     node.input[0] = in_name
 
