@@ -291,7 +291,7 @@ bool NumElementsRel(const Array<Type>& types,
   CHECK(tt != nullptr);
   const auto* param = attrs.as<NumElementsAttrs>();
   CHECK(param != nullptr);
-  reporter->Assign(types[1], TensorTypeNode::make({1}, param->dtype));
+  reporter->Assign(types[1], TensorTypeNode::Scalar(param->dtype));
   return true;
 }
 

@@ -58,7 +58,9 @@ class TVM_DLL IRMutator {
    * \return the mutated stmt
    */
   virtual Stmt Mutate(Stmt stmt) {
+    //std::cout<<"debugging stmt: "<<stmt<<std::endl;
     static const FMutateStmt& f = vtable_stmt();
+    //std::cout<<"debugging f(stmt, stmt, this): "<<f(stmt, stmt, this)<<std::endl;
     return f(stmt, stmt, this);
   }
   /*! \brief destructor */

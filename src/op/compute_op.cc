@@ -102,6 +102,12 @@ Tensor compute(Array<Expr> shape,
         Range(0, shape[i]), Var(os.str(), shape[i].type()), kDataPar));
     args.push_back(axis.back()->var);
   }
+  if(ndim == 0){
+    std::ostringstream os;
+    IterVar iter_var  = IterVarNode::make(Range(0, 1), Var(os.str()), kDataPar);
+    //axis.emplace_back(iter_var);
+    args.push_back(iter_var->var);
+  }
 
   return ComputeOpNode::make(
       name, tag, attrs, axis, {fcompute(args)}).output(0);
@@ -147,6 +153,7 @@ Operation ComputeOpNode::make(std::string name,
   n->attrs = std::move(attrs);
   n->axis = std::move(axis);
   n->body = std::move(body);
+  //std::cout<<"ComputeOpNode body: "<<n->body<<std::endl;
   if (n->body[0]->is_type<ir::Reduce>()) {
     const ir::Reduce* reduce = n->body[0].as<ir::Reduce>();
     n->reduce_axis = reduce->axis;

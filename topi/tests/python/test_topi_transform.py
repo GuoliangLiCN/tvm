@@ -620,6 +620,8 @@ def test_size():
     A = tvm.placeholder(shape=in_shape, dtype="float32", name="A")
     B = topi.size(A, dtype)
 
+    print("topi.size: {}".format(B))
+
     input = np.random.uniform(size=in_shape).astype(A.dtype)
     output = np.asarray(np.size(input)).astype(dtype)
 
@@ -633,6 +635,7 @@ def test_size():
         print("Running on target: %s" % device)
         with tvm.target.create(device):
             s = topi.generic.schedule_injective(B)
+        print(tvm.lower(s, [A, B], simple_mode=True))
         f = tvm.build(s, [A, B], device, name="size")
         f(tvm_input, tvm_output)
         tvm.testing.assert_allclose(tvm_output.asnumpy(), output)
@@ -642,6 +645,7 @@ def test_size():
 
 
 if __name__ == "__main__":
+    """
     test_strided_slice()
     test_concatenate()
     test_stack()
@@ -659,4 +663,5 @@ if __name__ == "__main__":
     test_repeat()
     test_tile()
     test_shape()
+    """
     test_size()
