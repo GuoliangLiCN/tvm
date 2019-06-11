@@ -274,10 +274,10 @@ struct ShapeOfAttrs : public tvm::AttrsNode<ShapeOfAttrs> {
 };
 
 /*! \brief Attributes for Size operator */
-struct SizeAttrs : public tvm::AttrsNode<SizeAttrs> {
+struct NumElementsAttrs : public tvm::AttrsNode<NumElementsAttrs> {
   DataType dtype;
 
-  TVM_DECLARE_ATTRS(SizeAttrs, "relay.attrs.SizeAttrs") {
+  TVM_DECLARE_ATTRS(NumElementsAttrs, "relay.attrs.NumElementsAttrs") {
     TVM_ATTR_FIELD(dtype)
         .describe("Target data type")
         .set_default(NullValue<DataType>());
