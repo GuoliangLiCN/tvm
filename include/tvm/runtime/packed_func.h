@@ -497,7 +497,7 @@ class TVMPODValue_ {
   }
   operator Object() const {
     if (type_code_ == kNull) return Object();
-    TVM_CHECK_TYPE_CODE(type_code_, kObject);
+    TVM_CHECK_TYPE_CODE(type_code_, kObjectCell);
     return Object(static_cast<ObjectCell*>(value_.v_handle));
   }
   operator TVMContext() const {
@@ -767,7 +767,7 @@ class TVMRetValue : public TVMPODValue_ {
   }
   TVMRetValue& operator=(Object other) {
     this->Clear();
-    type_code_ = kObject;
+    type_code_ = kObjectCell;
     value_.v_handle = other.ptr_.data_;
     other.ptr_.data_ = nullptr;
     return *this;
@@ -867,7 +867,7 @@ class TVMRetValue : public TVMPODValue_ {
             kNodeHandle, *other.template ptr<NodePtr<Node> >());
         break;
       }
-      case kObject: {
+      case kObjectCell: {
         *this = other.operator Object();
         break;
       }
@@ -918,7 +918,7 @@ class TVMRetValue : public TVMPODValue_ {
         static_cast<NDArray::Container*>(value_.v_handle)->DecRef();
         break;
       }
-      case kObject: {
+      case kObjectCell: {
         static_cast<ObjectCell*>(value_.v_handle)->DecRef();
         break;
       }
@@ -951,7 +951,7 @@ inline const char* TypeCode2Str(int type_code) {
     case kFuncHandle: return "FunctionHandle";
     case kModuleHandle: return "ModuleHandle";
     case kNDArrayContainer: return "NDArrayContainer";
-    case kObject: return "Object";
+    case kObjectCell: return "ObjectCell";
     default: LOG(FATAL) << "unknown type_code="
                         << static_cast<int>(type_code); return "";
   }

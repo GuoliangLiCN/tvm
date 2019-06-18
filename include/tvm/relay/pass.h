@@ -487,7 +487,7 @@ namespace vm {
  *
  * \return The constructed virtual machine.
  */
-runtime::vm::VirtualMachine CompileModule(const Module& mod);
+runtime::vm::VirtualMachine* CompileModule(const Module& mod);
 
 }  // namespace vm
 
