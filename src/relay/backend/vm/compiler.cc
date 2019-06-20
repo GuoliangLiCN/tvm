@@ -123,34 +123,45 @@ std::tuple<ConstMap, ConstTensorShapeMap> LayoutConstantPool(const Module& modul
 
 void InstructionPrint(std::ostream& os, const Instruction& instr);
 
-struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
-  /*! \brief Store the expression a variable points to. */
-  std::unordered_map<Var, Expr, NodeHash, NodeEqual> expr_map;
+class VMCompiler : ExprFunctor<void(const Expr& expr)> {
+ public:
+  VMCompiler(VMCompilerContext* context, TargetsMap targets)
+      : last_register_(0),
+        registers_num_(0),
+        engine_(CompileEngine::Global()),
+        context_(context),
+        targets_(targets) {}
 
-  std::vector<Instruction> instructions;
+  VMFunction Compile(const GlobalVar& var, const Function& func) {
+    size_t i = 0;
+    // We then assign register num to the free variables
+    for (auto param : func->params) {
+      auto arg_register = NewRegister();
+      CHECK_EQ(i, arg_register);
+      var_register_map_.insert({param, arg_register});
+      params_.push_back(param->name_hint());
+      ++i;
+    }
 
-  // var -> register num
-  std::unordered_map<Var, RegName, NodeHash, NodeEqual> var_register_map;
+    if (IsClosure(func)) {
+      Function inner_func = Downcast<Function>(func->body);
+      for (auto param : inner_func->params) {
+        auto arg_register = NewRegister();
+        CHECK_EQ(i, arg_register);
+        var_register_map_.insert({param, arg_register});
+        params_.push_back(param->name_hint());
+        ++i;
+      }
+      this->VisitExpr(inner_func->body);
+    } else {
+      this->VisitExpr(func->body);
+    }
+    instructions_.push_back(Instruction::Ret(last_register_));
+    return VMFunction(var->name_hint, params_, instructions_, registers_num_);
+  }
 
-  size_t last_register;
-
-  // Total number of virtual registers allocated
-  size_t registers_num;
-  CompileEngine engine;
-
-  /*! \brief Global shared meta data */
-  VMCompilerContext* context;
-
-  VMCompiler(VMCompilerContext* context)
-      : instructions(),
-        var_register_map(),
-        last_register(0),
-        registers_num(0),
-        engine(CompileEngine::Global()),
-        context(context)
-        {}
-
-  size_t NewRegister() { return registers_num++; }
+ protected:
+  size_t NewRegister() { return registers_num_++; }
 
   inline void Emit(const Instruction& instr) {
     DLOG(INFO) << "VMCompiler::Emit: instr=" << instr;
@@ -166,31 +177,31 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
       case Opcode::AllocClosure:
       case Opcode::Move:
       case Opcode::InvokeClosure:
-        last_register = instr.dst;
+        last_register_ = instr.dst;
         break;
       case Opcode::InvokePacked:
-        last_register = instr.packed_args[instr.arity - 1];
+        last_register_ = instr.packed_args[instr.arity - 1];
         break;
       case Opcode::If:
       case Opcode::Ret:
       case Opcode::Goto:
         break;
     }
-    instructions.push_back(instr);
+    instructions_.push_back(instr);
   }
 
   void VisitExpr_(const ConstantNode* const_node) {
     auto rconst = GetRef<Constant>(const_node);
-    auto it = this->context->const_map.find(rconst);
-    CHECK(it != this->context->const_map.end());
+    auto it = this->context_->const_map.find(rconst);
+    CHECK(it != this->context_->const_map.end());
     Emit(Instruction::LoadConst(it->second, NewRegister()));
   }
 
   void VisitExpr_(const VarNode* var_node) {
     auto var = GetRef<Var>(var_node);
-    auto reg_it = this->var_register_map.find(var);
-    CHECK(reg_it != this->var_register_map.end());
-    last_register = reg_it->second;
+    auto reg_it = this->var_register_map_.find(var);
+    CHECK(reg_it != this->var_register_map_.end());
+    last_register_ = reg_it->second;
   }
 
   void VisitExpr_(const TupleNode* tuple_node) {
@@ -199,7 +210,7 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
 
     for (auto& field : tuple->fields) {
       this->VisitExpr(field);
-      fields_registers.push_back(last_register);
+      fields_registers.push_back(last_register_);
     }
 
     // TODO(@jroesch): use correct tag
@@ -219,15 +230,15 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
   void VisitExpr_(const LetNode* let_node) {
     DLOG(INFO) << let_node->value;
     this->VisitExpr(let_node->value);
-    DLOG(INFO) << this->last_register;
-    var_register_map.insert({let_node->var, this->last_register});
+    DLOG(INFO) << this->last_register_;
+    var_register_map_.insert({let_node->var, this->last_register_});
     this->VisitExpr(let_node->body);
   }
 
   void VisitExpr_(const TupleGetItemNode* get_node) {
     auto get = GetRef<TupleGetItem>(get_node);
     this->VisitExpr(get->tuple);
-    auto tuple_register = last_register;
+    auto tuple_register = last_register_;
     Emit(Instruction::GetField(tuple_register, get->index, NewRegister()));
   }
 
@@ -239,28 +250,28 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
   void VisitExpr_(const IfNode* if_node) {
     this->VisitExpr(if_node->cond);
 
-    size_t cond_register = last_register;
+    size_t cond_register = last_register_;
 
-    auto after_cond = this->instructions.size();
+    auto after_cond = this->instructions_.size();
 
     this->Emit(Instruction::If(cond_register, 0, 0));
     this->VisitExpr(if_node->true_branch);
 
-    size_t true_register = last_register;
+    size_t true_register = last_register_;
 
     Emit(Instruction::Goto(0));
 
     // Finally store how many instructions there are in the
     // true branch.
-    auto after_true = this->instructions.size();
+    auto after_true = this->instructions_.size();
 
     this->VisitExpr(if_node->false_branch);
 
-    size_t false_register = last_register;
+    size_t false_register = last_register_;
 
     // Compute the total number of instructions
     // after generating false.
-    auto after_false = this->instructions.size();
+    auto after_false = this->instructions_.size();
 
     // Now we will compute the jump targets in order
     // to properly patch the instruction with the
@@ -270,11 +281,11 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
     // we patch up the if instruction, and goto.
     auto true_offset = 1;
     auto false_offset = after_true - after_cond;
-    this->instructions[after_cond].true_offset = true_offset;
-    this->instructions[after_cond].false_offset = false_offset;
+    this->instructions_[after_cond].true_offset = true_offset;
+    this->instructions_[after_cond].false_offset = false_offset;
 
     // Patch the Goto.
-    this->instructions[after_true - 1].pc_offset = (after_false - after_true) + 1;
+    this->instructions_[after_true - 1].pc_offset = (after_false - after_true) + 1;
 
     Emit(Instruction::Select(cond_register, true_register, false_register, NewRegister()));
   }
@@ -347,18 +358,27 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
 
     // Next generate the invoke instruction.
     CHECK(func->IsPrimitive());
-    auto target = Target::Create("llvm");
+    Target target;
+    if (targets_.size() == 1) {
+      // homogeneous execution.
+      for (auto kv : targets_) {
+        target = kv.second;
+      }
+    } else {
+      // heterogeneous execution.
+      LOG(FATAL) << "Currently VM compiler doesn't support heterogeneous compilation";
+    }
     auto key = CCacheKeyNode::make(func, target);
-    auto cfunc = engine->Lower(key);
+    auto cfunc = engine_->Lower(key);
     // TODO(jroesch): support lowered funcs for multiple targets
     CHECK_EQ(cfunc->funcs.size(), 1);
     auto op_index = -1;
-    if (this->context->seen_funcs.find(cfunc->funcs[0]) == this->context->seen_funcs.end()) {
-      op_index = this->context->lowered_funcs.size();
-      this->context->lowered_funcs.push_back(cfunc->funcs[0]);
-      this->context->seen_funcs[cfunc->funcs[0]] = op_index;
+    if (context_->seen_funcs.find(cfunc->funcs[0]) == context_->seen_funcs.end()) {
+      op_index = context_->lowered_funcs.size();
+      context_->lowered_funcs.push_back(cfunc->funcs[0]);
+      context_->seen_funcs[cfunc->funcs[0]] = op_index;
     } else {
-      op_index = this->context->seen_funcs[cfunc->funcs[0]];
+      op_index = context_->seen_funcs[cfunc->funcs[0]];
     }
 
     Emit(Instruction::InvokePacked(op_index, arity, return_val_count, unpacked_arg_regs));
@@ -378,7 +398,7 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
 
     for (auto arg : call_node->args) {
       this->VisitExpr(arg);
-      args_registers.push_back(last_register);
+      args_registers.push_back(last_register_);
     }
 
     Expr op = call_node->op;
@@ -388,12 +408,12 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
       EmitInvokePrimitive(GetRef<Function>(func_node), args_registers, call_node->checked_type());
     } else if (auto global_node = op.as<GlobalVarNode>()) {
       auto global = GetRef<GlobalVar>(global_node);
-      auto it = this->context->global_map.find(global);
-      CHECK(it != this->context->global_map.end());
+      auto it = context_->global_map.find(global);
+      CHECK(it != context_->global_map.end());
       DLOG(INFO) << "VisitExpr_: generating invoke for " << global->name_hint
                       << " with func_index=" << it->second;
 
-      auto func = this->context->module->Lookup(global);
+      auto func = context_->module->Lookup(global);
       if (IsClosure(func)) {
         auto arity = func->params.size();
         Emit(Instruction::AllocClosure(it->second, arity, args_registers, NewRegister()));
@@ -406,7 +426,7 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
                                       NewRegister()));
     } else if (auto var_node = op.as<VarNode>()) {
       VisitExpr(GetRef<Var>(var_node));
-      Emit(Instruction::InvokeClosure(last_register, args_registers, NewRegister()));
+      Emit(Instruction::InvokeClosure(last_register_, args_registers, NewRegister()));
     } else {
       LOG(FATAL) << "unsupported case in vm compiler: " << op;
     }
@@ -420,45 +440,27 @@ struct VMCompiler : ExprFunctor<void(const Expr& expr)> {
     }
   }
 
-  void CompileClosure(const Function& func) {
-    // We first layout the function arguments.
-    auto inner_func = Downcast<Function>(func->body);
+ protected:
+  /*! \brief Store the expression a variable points to. */
+  std::unordered_map<Var, Expr, NodeHash, NodeEqual> expr_map_;
 
-    size_t i = 0;
-    for (auto param : inner_func->params) {
-      auto arg_register = NewRegister();
-      CHECK_EQ(i, arg_register);
-      var_register_map.insert({param, arg_register});
-      i++;
-    }
+  std::vector<Instruction> instructions_;
 
-    // We then assign register num to the free variables
-    for (auto param : func->params) {
-      auto arg_register = NewRegister();
-      CHECK_EQ(i, arg_register);
-      var_register_map.insert({param, arg_register});
-      i++;
-    }
+  std::vector<std::string> params_;
 
-    // We will now process the body like normal.
-    this->VisitExpr(inner_func->body);
-  }
+  // var -> register num
+  std::unordered_map<Var, RegName, NodeHash, NodeEqual> var_register_map_;
 
-  void Compile(const Function& func) {
-    // We need to generate code specially for lifted closures.
-    if (IsClosure(func)) {
-      CompileClosure(func);
-      return;
-    }
+  size_t last_register_;
 
-    for (size_t i = 0; i < func->params.size(); ++i) {
-      auto arg_register = NewRegister();
-      CHECK_EQ(arg_register, i);
-      var_register_map.insert({func->params[i], arg_register});
-    }
+  // Total number of virtual registers allocated
+  size_t registers_num_;
+  CompileEngine engine_;
 
-    this->VisitExpr(func->body);
-  }
+  /*! \brief Global shared meta data */
+  VMCompilerContext* context_;
+
+  TargetsMap targets_;
 };
 
 class VMBuildModule : public runtime::ModuleNode {
@@ -467,6 +469,7 @@ class VMBuildModule : public runtime::ModuleNode {
                          const std::shared_ptr<ModuleNode>& sptr_to_self) final {
     if (name == "compile") {
       return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
+        CHECK_EQ(args.num_args, 3);
         this->Compile(args[0], args[1], args[2]);
       });
     } else if (name == "get_vm") {
@@ -490,6 +493,8 @@ class VMBuildModule : public runtime::ModuleNode {
   void Compile(const Module& mod_ref,
                const TargetsMap& targets,
                const tvm::Target& target_host) {
+    CHECK_EQ(targets.size(), 1)
+      << "Currently VM compiler doesn't support heterogeneous compilation";
     targets_ = targets;
     target_host_ = target_host;
     vm_ = std::make_shared<VirtualMachine>();
@@ -525,7 +530,8 @@ class VMBuildModule : public runtime::ModuleNode {
     for (auto named_func : context_.module->functions) {
       auto gvar = named_func.first;
       auto func = named_func.second;
-      auto vm_func = CompileFunc(&context_, gvar, func);
+      VMCompiler compiler(&context_, targets_);
+      auto vm_func = compiler.Compile(gvar, func);
 
       size_t func_index = context_.global_map.at(gvar);
       CHECK(func_index < vm_->functions.size());
@@ -568,37 +574,20 @@ class VMBuildModule : public runtime::ModuleNode {
     }
   }
 
-  VMFunction CompileFunc(VMCompilerContext* context, const GlobalVar& var, const Function& func) {
-    DLOG(INFO) << "CompileFunc: " << var << std::endl << AsText(func, false);
-    std::vector<std::string> params;
-    for (auto param : func->params) {
-      params.push_back(param->name_hint());
-    }
-    //size_t params = func->params.size();
-    VMCompiler compiler(context);
-    compiler.Compile(func);
-    // return the last evaluated expression
-    compiler.instructions.push_back(Instruction::Ret(compiler.last_register));
-
-    // Would like to refactor this so we only check if closure once.
-    if (IsClosure(func)) {
-      for (auto param : Downcast<Function>(func->body)->params) {
-        params.push_back(param->name_hint());
-      }
-    }
-    return VMFunction(var->name_hint, params, compiler.instructions, compiler.registers_num);
-  }
-
   void PopulatePackedFuncMap() {
     auto const& lowered_funcs = context_.lowered_funcs;
-    if (context_.lowered_funcs.size() == 0) {
+    if (lowered_funcs.size() == 0) {
       return;
     }
     runtime::Module mod;
-    // TODO(@jroesch): we need to read target from build config
-    Target target = Target::Create("llvm");
+    // TODO(@icemelon9): support heterogeneous targets
+    Target target;
+    for (auto kv : targets_) {
+      target = kv.second;
+    }
     if (const auto* f = runtime::Registry::Get("relay.backend.build")) {
-      mod = (*f)(tvm::Array<LoweredFunc>(lowered_funcs.begin(), lowered_funcs.end()), target);
+      mod = (*f)(tvm::Array<LoweredFunc>(lowered_funcs.begin(), lowered_funcs.end()),
+              target, target_host_);
     } else {
       LOG(FATAL) << "relay.backend.build is not registered";
     }

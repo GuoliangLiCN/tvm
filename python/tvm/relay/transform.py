@@ -456,6 +456,9 @@ def CanonicalizeCast():
     """
     return _transform.CanonicalizeCast()
 
+def LambdaLift():
+    return _transform.LambdaLift()
+
 def _wrap_class_module_pass(pass_cls, pass_info):
     """Wrap a python class as function pass"""
     class PyModulePass(ModulePass):
