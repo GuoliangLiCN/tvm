@@ -51,8 +51,10 @@ def benchmark_execution(net,
         return out.asnumpy()
 
     def get_tvm_vm_output(net, data, params, target, ctx, dtype='float32'):
-        ex = relay.create_executor('vm', mod=relay.Module(), ctx=ctx)
-        result = ex.evaluate(net)(data, **params)
+        mod = relay.Module()
+        mod[mod.entry_func] = net
+        ex = relay.create_executor('vm', mod=mod, ctx=ctx)
+        result = ex.evaluate()(data, **params)
         return result.asnumpy().astype(dtype)
 
     # random input
@@ -70,7 +72,7 @@ def benchmark_execution(net,
 def test_mlp():
     image_shape = (1, 28, 28)
     net, params = testing.mlp.get_workload(1)
-    benchmark_execution(net, params, data_shape=image_shape, out_shape=(1, 10))
+    benchmark_execution(net, params, data_shape=(1, 1, 28, 28), out_shape=(1, 10))
 
 
 def test_vgg():
@@ -94,20 +96,21 @@ def test_squeezenet():
 def test_inception_v3():
     image_shape = (3, 299, 299)
     net, params = testing.inception_v3.get_workload(image_shape=image_shape)
-    benchmark_execution(net, params, data_shape=image_shape)
+    benchmark_execution(net, params, data_shape=(1, 3, 299, 299))
 
 
 def test_dqn():
     image_shape = (4, 84, 84)
     net, params = testing.dqn.get_workload(
         batch_size=1, image_shape=image_shape)
-    benchmark_execution(net, params, data_shape=image_shape, out_shape=(1, 18))
+    benchmark_execution(net, params, data_shape=(1, 4, 84, 84), out_shape=(1, 18))
 
 
 def test_dcgan():
     image_shape = (1, 100)
     net, params = testing.dcgan.get_workload(batch_size=1)
-    benchmark_execution(net, params, data_shape=image_shape)
+    print(net)
+    benchmark_execution(net, params, data_shape=image_shape, out_shape=(1, 3, 64, 64))
 
 
 def test_mobilenet():
@@ -126,8 +129,7 @@ if __name__ == '__main__':
     test_squeezenet()
     test_mobilenet()
     test_densenet()
-    # The following networks fail
-    # test_inception_v3()
-    # test_mlp()
-    # test_dqn()
-    # test_dcgan()
+    test_inception_v3()
+    test_mlp()
+    test_dqn()
+    test_dcgan()
