@@ -478,19 +478,6 @@ struct StructuralHash {
   size_t operator()(const Expr& expr) const;
 };
 
-namespace vm {
-
-/*!
- * \brief Compile a module, and construct the virtual machine.
- *
- * \param mod The module to compile.
- *
- * \return The constructed virtual machine.
- */
-runtime::vm::VirtualMachine* CompileModule(const Module& mod);
-
-}  // namespace vm
-
 }  // namespace relay
 }  // namespace tvm
 
