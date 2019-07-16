@@ -190,6 +190,8 @@ def build(func, target=None, target_host=None, params=None):
     else:
         tophub_context = autotvm.util.EmptyContext()
 
+    print("tophub_context is {}".format(tophub_context))
+
     with tophub_context:
         bld_mod = BuildModule()
         graph_json, mod, params = bld_mod.build(func, target, target_host,

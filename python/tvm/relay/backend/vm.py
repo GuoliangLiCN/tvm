@@ -25,6 +25,7 @@ import numpy as np
 import tvm
 from . import _vm
 from . import vmobj as _obj
+from tvm import autotvm
 from .interpreter import Executor
 
 
@@ -153,6 +154,17 @@ class BuildModule(object):
             The VM runtime.
         """
         target = _update_target(target)
+        # TODO yongwu: change mod to autotuned mod
+        """
+        if isinstance(autotvm.DispatchContext.current, autotvm.FallbackContext):
+            tophub_context = autotvm.tophub.context(list(target.values()))
+        else:
+            tophub_context = autotvm.util.EmptyContext()
+        print("#VM - tophub_context is {}".format(tophub_context))
+        with tophub_context:
+            self._compile(mod, target, target_host)
+            # must be here for sure
+        """
         self._compile(mod, target, target_host)
         return VirtualMachine(self._get_vm())
 

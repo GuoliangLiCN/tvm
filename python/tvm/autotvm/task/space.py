@@ -770,6 +770,7 @@ class ConfigSpace(object):
         name: str
             name of the transform
         """
+        print("self._entity_map is {}  --  self._entity_map[name] is {}  ---   name is {} ".format(self._entity_map, self._entity_map[name], name))
         return self._entity_map[name]
 
     def __repr__(self):

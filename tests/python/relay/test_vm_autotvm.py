@@ -63,15 +63,32 @@ def test_id():
     x = relay.var('x', shape=(10, 10), dtype='float64')
     f = relay.Function([x], x)
     x_data = np.random.rand(10, 10).astype('float64')
-    #data_tvm = tvm.nd.array((np.random.uniform(size=data_shape)).astype(dtype))
     res = veval(f, x_data)
     tvm.testing.assert_allclose(res.asnumpy(), x_data)
 
 def test_op():
+    from tvm import autotvm
+    target="llvm"
     x = relay.var('x', shape=(10, 10))
     f = relay.Function([x], x + x)
     x_data = np.random.rand(10, 10).astype('float32')
-    res = veval(f, x_data)
+    mod = relay.Module()
+    mod[mod.entry_func] = f
+    build_mod = relay.vm.BuildModule()
+    vm = build_mod.compile(mod, target)
+    vm.init(tvm.cpu())
+    print("fuck here")
+    res = vm.run(x_data)
+    print("res is {}".format(res.asnumpy()))
+    #res = veval(f, x_data)
+    if isinstance(autotvm.DispatchContext.current, autotvm.FallbackContext):
+        print("in autotvm")
+        pass
+        #tophub_context = autotvm.tophub.context()
+    else:
+        tophub_context = autotvm.util.EmptyContext()
+    #print("tophub_context is {}".format(tophub_context))
+
     tvm.testing.assert_allclose(res.asnumpy(), x_data + x_data)
 
 def any(x):
@@ -99,7 +116,7 @@ def test_simple_if():
     x = relay.var('x', shape=(10, 10))
     y = relay.var('y', shape=(10, 10))
     f = relay.Function([x, y],
-        relay.If(any(relay.op.equal(x, y)), x, y))
+                       relay.If(any(relay.op.equal(x, y)), x, y))
     x_data = np.random.rand(10, 10).astype('float32')
     y_data = np.random.rand(10, 10).astype('float32')
 
@@ -262,8 +279,9 @@ def test_closure():
     tvm.testing.assert_allclose(res.asnumpy(), 3.0)
 
 if __name__ == "__main__":
-    test_id()
+    # test_id()
     test_op()
+    """
     test_cond()
     test_simple_if()
     test_simple_call()
@@ -278,3 +296,4 @@ if __name__ == "__main__":
     # TODO(@jroesch): restore when match is supported
     # test_list_constructor()
     test_closure()
+    """

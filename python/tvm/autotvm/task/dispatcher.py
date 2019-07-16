@@ -209,6 +209,7 @@ def dispatcher(fworkload):
         tgt = _target.current_target()
         workload = func(*args, **kwargs)
         cfg = DispatchContext.current.query(tgt, workload)
+
         if cfg.is_fallback and not cfg.template_key:
             # first try 'direct' template
             if 'direct' in dispatch_dict:
@@ -217,6 +218,9 @@ def dispatcher(fworkload):
             for v in dispatch_dict.values():
                 return v(cfg, *args, **kwargs)
         else:
+            print(
+                "cfg is {}\ncfg.template_key is {}\ndispatch_dict is {}\nworkload is {}\ncfg.is_fallback: {}\nfunc is {}\n\n\n\n".format(
+                    cfg, cfg.template_key, dispatch_dict, workload, cfg.is_fallback, func))
             return dispatch_dict[cfg.template_key](cfg, *args, **kwargs)
 
     fdecorate = decorate(fworkload, dispatch_func)
