@@ -149,14 +149,14 @@ def _convert_merge(inexpr, keras_layer, _):
     ret = inexpr[0]
     if merge_type == 'Dot':
         if keras_layer.axes == 1:
-            ret = _op.transpose(ret, axes=[0, 2, 1])
-            inexpr[1] = _op.transpose(inexpr[1], axes=[0, 2, 1])
+            # ret = _op.transpose(ret, axes=[0, 1, 2])
+            # inexpr[1] = _op.transpose(inexpr[1], axes=[0, 1, 2])
 
         elif isinstance(keras_layer.axes, list):
             if keras_layer.axes == [1, 2]:
-                ret = _op.transpose(ret, axes=[0, 2, 1])
-            elif keras_layer.axes == [2, 1]:
                 inexpr[1] = _op.transpose(inexpr[1], axes=[0, 2, 1])
+            elif keras_layer.axes == [2, 1]:
+                ret = _op.transpose(ret, axes=[0, 2, 1])
             else:
                 raise tvm.error.OpAttributeUnimplemented(
                     'Dot with {} is not supported.'.format(keras_layer.axes))
@@ -476,6 +476,9 @@ def _convert_concat(inexpr, keras_layer, _):
 def _convert_reshape(inexpr, keras_layer, _):
     _check_data_format(keras_layer)
     ch = keras_layer.input_shape[-1]
+    if len(keras_layer.target_shape) < 3:
+        # NHWC -> NCHW
+        return _op.reshape(inexpr, newshape=(1, ) + tuple(reversed(keras_layer.target_shape)))
     assert ch == keras_layer.target_shape[-1], \
         "Only supports last dimension in target shape being equal to " \
         "the channel number of input tensor."
@@ -768,5 +771,12 @@ def from_keras(model, shape=None):
                for oc in model._output_coordinates]
     outexpr = outexpr[0] if len(outexpr) == 1 else _expr.Tuple(outexpr)
     func = _expr.Function(analysis.free_vars(outexpr), outexpr)
+
+    from tvm import relay
+    from tvm.relay import transform
+    mod = relay.Module.from_expr(func)
+    mod = transform.InferType()(mod)
+    print(mod["main"])
+
     params = {k:_nd.array(np.array(v, dtype=np.float32)) for k, v in etab.params.items()}
     return _module.Module.from_expr(func), params
