@@ -149,14 +149,12 @@ def _convert_merge(inexpr, keras_layer, _):
     ret = inexpr[0]
     if merge_type == 'Dot':
         if keras_layer.axes == 1:
-            # ret = _op.transpose(ret, axes=[0, 1, 2])
-            # inexpr[1] = _op.transpose(inexpr[1], axes=[0, 1, 2])
             pass
         elif isinstance(keras_layer.axes, list):
             if keras_layer.axes == [1, 2]:
                 inexpr[1] = _op.transpose(inexpr[1], axes=[0, 2, 1])
             elif keras_layer.axes == [2, 1]:
-                ret = _op.transpose(ret, axes=[0, 2, 1])
+                pass
             else:
                 raise tvm.error.OpAttributeUnimplemented(
                     'Dot with {} is not supported.'.format(keras_layer.axes))
