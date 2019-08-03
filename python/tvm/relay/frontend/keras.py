@@ -151,7 +151,7 @@ def _convert_merge(inexpr, keras_layer, _):
         if keras_layer.axes == 1:
             # ret = _op.transpose(ret, axes=[0, 1, 2])
             # inexpr[1] = _op.transpose(inexpr[1], axes=[0, 1, 2])
-
+            pass
         elif isinstance(keras_layer.axes, list):
             if keras_layer.axes == [1, 2]:
                 inexpr[1] = _op.transpose(inexpr[1], axes=[0, 2, 1])
@@ -478,7 +478,7 @@ def _convert_reshape(inexpr, keras_layer, _):
     ch = keras_layer.input_shape[-1]
     if len(keras_layer.target_shape) < 3:
         # NHWC -> NCHW
-        return _op.reshape(inexpr, newshape=(1, ) + tuple(reversed(keras_layer.target_shape)))
+        return _op.reshape(inexpr, newshape=(-1, ) + tuple(reversed(keras_layer.target_shape)))
     assert ch == keras_layer.target_shape[-1], \
         "Only supports last dimension in target shape being equal to " \
         "the channel number of input tensor."
