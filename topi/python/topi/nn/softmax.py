@@ -22,15 +22,12 @@ import tvm
 @tvm.tag_scope(tag='softmax_output')
 def softmax(x, axis=-1):
     """Perform softmax activation on the data
-
     Parameters
     ----------
     data : tvm.Tensor
         can be any dimension
-
     axis : int
         channel axis
-
     Returns
     -------
     output : tvm.Tensor
@@ -48,34 +45,24 @@ def softmax(x, axis=-1):
     def insert_reduce_index(indices, reduce_index):
         return indices[:axis] + (reduce_index,) + indices[axis:]
 
-    def get_non_reduce_indices(indices):
-        return tuple([var for (i, var) in enumerate(indices) if i != axis])
-
     def _compute_max(*indices):
         eval_range = insert_reduce_index(indices, k1)
         return tvm.max(x[eval_range], axis=k1)
 
-    def _compute_exp(max_elem, *indices):
-        non_reduce_indices = get_non_reduce_indices(indices)
-        return tvm.exp(x[indices] - max_elem[non_reduce_indices])
-
-    def _compute_expsum(exp, *indices):
+    def _compute_expsum(max_elem, *indices):
         eval_range = insert_reduce_index(indices, k2)
-        return tvm.sum(exp[eval_range], axis=k2)
+        return tvm.sum(tvm.exp(x[eval_range] - max_elem[indices]), axis=k2)
 
-    def _normalize(exp, expsum, *indices):
-        non_reduce_indices = get_non_reduce_indices(indices)
-        return exp[indices] / expsum[non_reduce_indices]
+    def _normalize(max_elem, expsum, *indices):
+        non_reduce_indices = tuple([var for (i, var) in enumerate(indices) if i != axis])
+        return tvm.exp(x[indices] - max_elem[non_reduce_indices]) / expsum[non_reduce_indices]
 
     reduced_shape = tuple([dim for (i, dim) in enumerate(shape) if i != axis])
     max_elem = tvm.compute(reduced_shape, _compute_max, name='T_softmax_maxelem')
-    exp = tvm.compute(shape, lambda *indices: _compute_exp(max_elem, *indices),
-                      name='T_softmax_exp')
-    expsum = tvm.compute(reduced_shape, lambda *indices: _compute_expsum(exp, *indices),
+    expsum = tvm.compute(reduced_shape, lambda *indices: _compute_expsum(max_elem, *indices),
                          name='T_softmax_expsum')
-    return tvm.compute(shape, lambda *indices: _normalize(exp, expsum, *indices),
-                       name='T_softmax_norm', attrs={"axis" : axis})
-
+    return tvm.compute(shape, lambda *indices: _normalize(max_elem, expsum, *indices),
+                       name='T_softmax_norm')
 
 @tvm.tag_scope(tag='log_softmax_output')
 def log_softmax(x):

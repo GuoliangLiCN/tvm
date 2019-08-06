@@ -22,7 +22,7 @@ from .. import generic
 
 @generic.schedule_softmax.register(["cpu"])
 def schedule_softmax(outs):
-    """Schedule for softmax
+    '''Schedule for softmax
 
     Parameters
     ----------
@@ -34,17 +34,35 @@ def schedule_softmax(outs):
     -------
     sch: Schedule
         The computation schedule for the op.
-    """
+    '''
     outs = [outs] if isinstance(outs, tvm.tensor.Tensor) else outs
     softmax = outs[0]
     s = tvm.create_schedule([x.op for x in outs])
 
     op_tag = softmax.op.tag
     if op_tag == 'softmax_output':
+
         exp = softmax.op.input_tensors[0]
         expsum = softmax.op.input_tensors[1]
         max_elem = s[exp].op.input_tensors[1]
         axis = int(softmax.op.attrs['axis'])
+        print("##########\nexp is {}\n expsum is {}\nmax_elem is {}\n axis is {}".format(exp, expsum, max_elem, axis))
+        #fused_exp = s[exp].fuse(*s[exp].op.axis)
+        #s[exp].parallel(s[exp].op.axis[0])
+        s[exp].parallel(s[exp].op.axis[1])
+        #s[exp].parallel(s[exp].op.axis[2])
+        s[expsum].parallel(s[expsum].op.axis[0])
+        s[max_elem].parallel(s[max_elem].op.axis[0])
+        if len(s[max_elem].op.axis) > 1:
+            s[max_elem].parallel(s[max_elem].op.axis[1])
+        #s[max_elem].parallel(s[max_elem].op.axis[1])
+        print("%%%%%%%%\n{}\n{}\nmax: {}\n".format(s[exp].op.axis, s[expsum].op.axis, s[max_elem].op.axis))
+        """"
+        exp is Tensor(shape=[1, 1024, 1024], op.name=tensor)
+        expsum is Tensor(shape=[1, 1024], op.name=tensor)
+        max_elem is Tensor(shape=[1, 1024], op.name=tensor)
+        """
+        axis is 1
     elif op_tag == 'log_softmax_output':
         exp = None
         max_elem = softmax.op.input_tensors[1]
@@ -53,7 +71,6 @@ def schedule_softmax(outs):
     else:
         raise ValueError('Tag is expected to be softmax_output or log_softmax_output. \
                          Got {0}'.format(op_tag))
-
     # only parallelize outer dimensions up to axis
     outer_axes = [s[softmax].op.axis[i] for i in range(0, axis)]
     fused_outer_axes = s[softmax].fuse(*outer_axes)
@@ -67,3 +84,46 @@ def schedule_softmax(outs):
         s[exp].compute_at(s[softmax], fused_outer_axes)
 
     return s
+
+"""
+
+def _fuse_parallel(s, x):
+    if len(s[x].op.axis) >= 5:
+        fused = s[x].fuse(s[x].op.axis[0], s[x].op.axis[1], s[x].op.axis[2])
+        s[x].parallel(fused)
+    elif len(s[x].op.axis) >= 3:
+        fused = s[x].fuse(s[x].op.axis[0], s[x].op.axis[1])
+        s[x].parallel(fused)
+    else:
+        s[x].parallel(s[x].op.axis[0])
+
+@generic.schedule_softmax.register(["cpu"])
+def schedule_softmax(outs):
+    Schedule for softmax
+    Parameters
+    ----------
+    outs: Array of Tensor
+          The computation graph description of softmax
+          in the format of an array of tensors.
+    Returns
+    -------
+    sch: Schedule
+        The computation schedule for the op.
+        [Tensor(shape=[1, 4], op.name=tensor), Tensor(shape=[1], op.name=tensor)]
+        [Tensor(shape=[1, 1024, 1024], op.name=tensor), Tensor(shape=[1, 1024], op.name=tensor)]
+                exp is Tensor(shape=[1, 1024, 1024], op.name=tensor)
+        expsum is Tensor(shape=[1, 1024], op.name=tensor)
+        max_elem is Tensor(shape=[1, 1024], op.name=tensor)
+        axis is 1
+
+    outs = [outs] if isinstance(outs, tvm.tensor.Tensor) else outs
+    x = outs[0]
+    print("$$$$$\n{}".format( x.op.input_tensors))
+    max_elem = x.op.input_tensors[0]
+    exp_sum = x.op.input_tensors[1]
+    s = tvm.create_schedule([x.op for x in outs])
+    tvm.schedule.AutoInlineInjective(s)
+    for out in [max_elem, exp_sum, x]:
+        _fuse_parallel(s, out)
+    return s
+"""
