@@ -271,8 +271,9 @@ def _conv(opname):
                 in_h = input_shape[2]
                 in_w = input_shape[3]
 
-            dilation_h = attr['dilations'][0]
-            dilation_w = attr['dilations'][1]
+            #print("inputs: {}\n, yong_attr: {}".format(inputs, attr))
+            dilation_h = attr['dilations'][0] if 'dilations' in attr else 1
+            dilation_w = attr['dilations'][1] if 'dilations' in attr else 1
             dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
             dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
             pad_v = _get_pad_pair(in_h, dilated_kernel_h, stride_h)
@@ -1843,6 +1844,7 @@ class GraphProto(object):
 
         # Parse the nodes to re-create TF graph using Relay operators.
         for node in graph.node:
+            print("Processing op: {}".format(node.op))
             # Tensorflow doesn't have separate list for params extraction.
             # Operator name 'Const' is treated as a parameter to build params dict.
 
@@ -1863,9 +1865,11 @@ class GraphProto(object):
                 self._output_shapes[node.name] = [None]
 
             if node.op == "Const":
+                #print("node {}'s items: {}".format(node.name, node.attr.items))
                 # All Const nodes are Param nodes, lets parse
                 self._num_param += 1
                 for key, value in node.attr.items():
+                    #print("key is {}, value is {}\n shape: {}".format(key, value, shape))
                     self._parse_param(key, value, node.name, shape)
                 if node.name not in self._nodes:
                     raise NotImplementedError( \
@@ -2006,11 +2010,17 @@ class GraphProto(object):
 
         if key == 'value':
             np_array = tensor_util.MakeNdarray(value.tensor)
+            #print("np_array is {}\n dtype is {}\n".format(np_array, np_array.dtype))
+
+            #print("name: {}\nshape: {}".format(name, shape))
 
             if np_array.dtype == np.dtype(object):
                 # Object types are generally tensorflow DT_STRING (DecodeJpeg op).
                 # Just leave it as placeholder.
-                self._nodes[name] = [_expr.var(name, shape=shape[name], dtype='uint8')]
+                if shape and name in shape:
+                    self._nodes[name] = [_expr.var(name, shape=shape[name], dtype='uint8')]
+                else:
+                    self._nodes[name] = [_expr.var(name, shape=(), dtype='uint8')]
 
                 return
 
