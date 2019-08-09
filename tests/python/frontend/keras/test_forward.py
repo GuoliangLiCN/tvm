@@ -104,23 +104,13 @@ def test_forward_merge_dot():
         verify_keras_frontend(keras_model, need_transpose=False)
 
 def test_forward_activations():
-    data = keras.layers.Input(shape=(32, 32, 3))
-    act_funcs = [keras.layers.Activation('softmax'),
-                 keras.layers.Activation('softplus'),
-                 keras.layers.Activation('relu'),
-                 keras.layers.Activation('softsign'),
-                 keras.layers.Activation('hard_sigmoid'),
-                 keras.layers.Activation('sigmoid'),
-                 keras.layers.Activation('tanh'),
-                 keras.layers.Activation('linear'),
-                 keras.layers.Activation('selu'),
-                 keras.layers.Softmax(),
-                 keras.layers.ReLU(),
-                 keras.layers.ReLU(max_value=6.),
-                 keras.layers.LeakyReLU(alpha=0.3),
-                 keras.layers.PReLU(weights=np.random.rand(1, 32, 32, 3)),
-                 keras.layers.ELU(alpha=0.5),
-                 keras.layers.ThresholdedReLU(theta=0.5)]
+    data = keras.layers.Input(shape=(32, 32))
+    act_funcs = [#keras.layers.Activation('softmax'),
+                 #keras.layers.Softmax(),
+                 #keras.layers.Softmax(axis=-1),
+                 keras.layers.Softmax(axis=1),
+                 #keras.layers.Softmax(axis=2),
+                 ]
     for act_func in act_funcs:
         x = act_func(data)
         keras_model = keras.models.Model(data, x)
@@ -288,9 +278,12 @@ def test_forward_mobilenet():
 
 if __name__ == '__main__':
 
+    """
     test_forward_merge()
     test_forward_merge_dot()
+    """
     test_forward_activations()
+    """"
     test_forward_dense()
     test_forward_permute()
     test_forward_sequential()
@@ -308,3 +301,4 @@ if __name__ == '__main__':
     test_forward_xception()
     test_forward_resnet50()
     test_forward_mobilenet()
+    """

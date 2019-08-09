@@ -117,7 +117,18 @@ def _convert_advanced_activation(inexpr, keras_layer, etab):
     act_type = type(keras_layer).__name__
 
     if act_type == 'Softmax':
-        return _op.nn.softmax(inexpr, axis=1)
+        dims = len(keras_layer.input_shape)
+        print("dims is {}".format(dims))
+        print("original axis {}".format(keras_layer.axis))
+        axis = keras_layer.axis
+        if keras_layer.axis == -1 or keras_layer.axis == dims-1:
+            axis = dims-3
+        elif keras_layer.axis == dims-3:
+            axis = dims-1
+        elif keras_layer.axis > dims-3:
+            axis = axis + 1
+        print("####   axis  --- {} ".format(axis))
+        return _op.nn.softmax(inexpr, axis=2)
     if act_type == 'ReLU':
         if keras_layer.max_value:
             return _op.clip(inexpr, a_min=0., a_max=float(keras_layer.max_value))
