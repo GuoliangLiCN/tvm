@@ -159,8 +159,11 @@ def _convert_merge(inexpr, keras_layer, _):
                 if axis not in [1, 2]:
                     raise tvm.error.OpAttributeUnimplemented(
                         'Dot with axes {} is not supported.'.format(keras_layer.axes))
-                if axes[i] == 1:
-                    inexpr[i] = _op.transpose(inexpr[i], axes=[0, 2, 1])
+            if axes == [1, 2]:
+                inexpr[1] = _op.transpose(inexpr[1], axes=[0, 2, 1])
+            elif axes == [2, 1]:
+                tmp = _op.nn.batch_matmul(inexpr[0], inexpr[1])
+                return _op.transpose(tmp, axes=[0, 2, 1])
         else:
             raise tvm.error.OpAttributeUnImplemented(
                 'Dot with axes {} is not supported.'.format(keras_layer.axes))
@@ -480,12 +483,11 @@ def _convert_concat(inexpr, keras_layer, _):
 
 def _convert_reshape(inexpr, keras_layer, _):
     _check_data_format(keras_layer)
-    if len(keras_layer.target_shape) < 3:
+    if len(keras_layer.target_shape) < 2:
         return _op.reshape(inexpr, newshape=(1, ) + keras_layer.target_shape)
     ch = keras_layer.input_shape[-1]
-    assert ch == keras_layer.target_shape[-1], \
-        "Only supports last dimension in target shape being equal to " \
-        "the channel number of input tensor."
+    if ch != keras_layer.target_shape[-1]:
+        return _op.reshape(inexpr, newshape=(1, ) + keras_layer.target_shape)
     shape = (-1, ch) + keras_layer.target_shape[:-1]
     return _op.reshape(inexpr, newshape=shape)
 
