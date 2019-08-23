@@ -118,10 +118,14 @@ def _convert_advanced_activation(inexpr, keras_layer, etab):
 
     if act_type == 'Softmax':
         return _op.nn.softmax(inexpr, axis=1)
+        new_data = _op.reshape(inexpr, newshape=(1, 256))
+        softmaxed = _op.nn.softmax(new_data, axis=-1)
+        return _op.reshape(softmaxed, newshape=(1, 16, 16))
     if act_type == 'ReLU':
         if keras_layer.max_value:
             return _op.clip(inexpr, a_min=0., a_max=float(keras_layer.max_value))
         return _op.nn.relu(inexpr)
+
     if act_type == 'LeakyReLU':
         return _op.nn.leaky_relu(inexpr, alpha=float(keras_layer.alpha))
     if act_type == 'ELU':
@@ -159,8 +163,11 @@ def _convert_merge(inexpr, keras_layer, _):
                 if axis not in [1, 2]:
                     raise tvm.error.OpAttributeUnimplemented(
                         'Dot with axes {} is not supported.'.format(keras_layer.axes))
-                if axes[i] == 1:
-                    inexpr[i] = _op.transpose(inexpr[i], axes=[0, 2, 1])
+            if axes == [1, 2]:
+                inexpr[1] = _op.transpose(inexpr[1], axes=[0, 2, 1])
+            elif axes == [2, 1]:
+                tmp = _op.nn.batch_matmul(inexpr[0], inexpr[1])
+                return _op.transpose(tmp, axes=[0, 2, 1])
         else:
             raise tvm.error.OpAttributeUnImplemented(
                 'Dot with axes {} is not supported.'.format(keras_layer.axes))
@@ -480,12 +487,11 @@ def _convert_concat(inexpr, keras_layer, _):
 
 def _convert_reshape(inexpr, keras_layer, _):
     _check_data_format(keras_layer)
-    if len(keras_layer.target_shape) < 3:
+    if len(keras_layer.target_shape) < 2:
         return _op.reshape(inexpr, newshape=(1, ) + keras_layer.target_shape)
     ch = keras_layer.input_shape[-1]
-    assert ch == keras_layer.target_shape[-1], \
-        "Only supports last dimension in target shape being equal to " \
-        "the channel number of input tensor."
+    if ch != keras_layer.target_shape[-1]:
+        return _op.reshape(inexpr, newshape=(1, ) + keras_layer.target_shape)
     shape = (-1, ch) + keras_layer.target_shape[:-1]
     return _op.reshape(inexpr, newshape=shape)
 
