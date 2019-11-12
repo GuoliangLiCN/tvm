@@ -90,11 +90,11 @@ def _get_list_param(params, input_node):
 def _get_tuple_param(params, input_node):
     return tuple(_get_param(params, input_node))
 
-def _need_module_for_shape_inference(op):
-    return op in ['StridedSlice']
-
 def _need_prelude_for_shape_inference(op):
     return "TensorArray" in op
+
+def _need_module_for_shape_inference(op):
+    return op in ['StridedSlice, NonMaxSuppressionV3']
 
 def _rsqrt():
     def _impl(inputs, attr, params):
@@ -308,6 +308,7 @@ def _conv(opname):
 
         out = AttrCvt(
             op_name=_dimension_picker('conv'),
+            ignores=['explicit_paddings'],
             transforms={
                 'kernel_shape': 'kernel_size',
                 'data_format': 'data_layout',
@@ -322,6 +323,53 @@ def _conv(opname):
             out = _op.transpose(out, axes=(0, 2, 3, 1))
 
         return out
+    return _impl
+
+def _nms():
+    def _impl(inputs, attr, params):
+        # Get parameter values
+        max_output_size = int(np.atleast_1d(inputs[2].data.asnumpy().astype("int64"))[0])
+        iou_threshold = np.atleast_1d(inputs[3].data.asnumpy())[0]
+        # score_threshold was introduced from V3
+        score_threshold = np.atleast_1d(inputs[4].data.asnumpy())[0] if len(inputs) > 4 else None
+
+        scores = AttrCvt(op_name="expand_dims",
+                         extras={'axis': -1, 'num_newaxis': 1})([inputs[1]], attr)
+
+        data = get_relay_op('concatenate')([scores, inputs[0]], -1)
+        # expand to [class_id, prob, box]
+        # data = _get_relay_op('concatenate')([scores, data], -1)
+        # expand to [batch_size, num_anchors, 6] or [batch_size, num_anchors, 5]
+
+        data = get_relay_op('expand_dims')(data, 0, 1)
+
+        # Don't need to call get_valid_counts for TensorFlow and ONNX
+        # ct, data = _get_relay_op('get_valid_counts')(data, score_threshold=score_threshold,
+        #                                              id_index=-1, score_index=0)
+        # get the number of anchors
+        data_shape = attr['_input_shapes'][inputs[1]]
+        valid_cnt = _expr.const(data_shape)
+        # TensorFlow NMS doesn't have parameter top_k
+        top_k = -1
+        # score_index is 0 since TF doesn't have class id for nms input
+        score_index = 0
+        nms_ret = get_relay_op('non_max_suppression')(data=data,
+                                                      valid_count=valid_cnt,
+                                                      max_output_size=max_output_size,
+                                                      score_threshold=score_threshold,
+                                                      iou_threshold=iou_threshold,
+                                                      force_suppress=False,
+                                                      top_k=top_k,
+                                                      coord_start=1,
+                                                      score_index=score_index,
+                                                      id_index=-1,
+                                                      return_indices=True,
+                                                      invalid_to_bottom=False)
+
+        end = get_relay_op("squeeze")(nms_ret[1], axis=[1])
+        data_slice = get_relay_op("squeeze")(nms_ret[0], axis=[0])
+        ret = get_relay_op("strided_slice")(data_slice, _expr.const([0]), end, _expr.const([1]))
+        return ret
     return _impl
 
 def _decode_image():
@@ -403,9 +451,13 @@ def _resize_bilinear():
         inputs.pop(1)
         # NHWC
         attr['layout'] = 'NHWC'
+        if "half_pixel_centers" in attr:
+            if attr['half_pixel_centers'] is True:
+                raise tvm.error.OpAttributeUnImplemented(
+                    'Attribute half_pixel_centers=True is not supported in operator resize')
 
         return AttrCvt(op_name="resize",
-                       ignores=['Tdim'],
+                       ignores=['Tdim', 'half_pixel_centers'],
                        extras={'method': "bilinear"})(inputs, attr)
     return _impl
 
@@ -418,9 +470,13 @@ def _resize_nearest_neighbor():
         inputs.pop(1)
         # NHWC
         attr['layout'] = 'NHWC'
+        if "half_pixel_centers" in attr:
+            if attr['half_pixel_centers'] is True:
+                raise tvm.error.OpAttributeUnImplemented(
+                    'Attribute half_pixel_centers=True is not supported in operator resize')
 
         return AttrCvt(op_name="resize",
-                       ignores=['Tdim'],
+                       ignores=['Tdim', 'half_pixel_centers'],
                        extras={'method': "nearest_neighbor"})(inputs, attr)
     return _impl
 
@@ -1202,7 +1258,7 @@ def _topk():
             raise tvm.error.OpAttributeInvalid(
                 'Attribute k must be positive in operator TopKV2')
         if attr['sorted'] is False:
-            raise tvm.error.OpAttributeUnimplemented(
+            raise tvm.error.OpAttributeUnImplemented(
                 'Attribute sorted=False is not supported in operator TopKV2')
         return AttrCvt(op_name='topk',
                        ignores=['sorted'],
@@ -1437,6 +1493,8 @@ _convert_map = {
     'Mod'                               : _elemwise('mod'),
     'Mul'                               : _elemwise('multiply'),
     'Neg'                               : AttrCvt('negative'),
+    'NonMaxSuppressionV2'               : _nms(),
+    'NonMaxSuppressionV3'               : _nms(),
     'NoOp'                              : _no_op(),
     'NotEqual'                          : _broadcast('not_equal'),
     'OneHot'                            : _one_hot(),
